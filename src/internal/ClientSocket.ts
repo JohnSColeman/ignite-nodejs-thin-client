@@ -86,7 +86,6 @@ class ProtocolVersion {
     }
 }
 
-const PROTOCOL_VERSION_1_0_0 = new ProtocolVersion(1, 0, 0);
 const PROTOCOL_VERSION_1_1_0 = new ProtocolVersion(1, 1, 0);
 const PROTOCOL_VERSION_1_2_0 = new ProtocolVersion(1, 2, 0);
 const PROTOCOL_VERSION_1_3_0 = new ProtocolVersion(1, 3, 0);
@@ -136,6 +135,7 @@ export default class ClientSocket {
     private _protocolVersion: ProtocolVersion;
     private _port: number | string;
     private _version: number;
+    private _processingQueue: Promise<void>;
 
     constructor(endpoint: string, config: IgniteClientConfiguration, communicator: BinaryCommunicator, onSocketDisconnect: Function, onAffinityTopologyChange: Function) {
         ArgumentChecker.notEmpty(endpoint, 'endpoints');
@@ -158,6 +158,7 @@ export default class ClientSocket {
         this._error = null;
 
         this._nodeUuid = null;
+        this._processingQueue = Promise.resolve();
     }
 
     async connect() {
@@ -216,14 +217,17 @@ export default class ClientSocket {
             this._socket = net.createConnection(<NetConnectOpts>options, onConnected);
         }
 
-        this._socket.on('data', async (data: Buffer) => {
-            try {
-                await this._processResponse(data);
-            }
-            catch (err) {
-                this._error = err.message;
-                this._disconnect();
-            }
+        // Serialize response processing — each 'data' event is chained onto the
+        // previous one so that _processResponse never runs concurrently.
+        // Without this, a second TCP frame arriving while _finalizeResponse is
+        // awaited would corrupt the shared _buffer/_offset state.
+        this._socket.on('data', (data: Buffer) => {
+            this._processingQueue = this._processingQueue
+                .then(() => this._processResponse(data))
+                .catch(err => {
+                    this._error = err.message;
+                    this._disconnect();
+                });
         });
         this._socket.on('close', () => {
             this._disconnect(false);
@@ -266,6 +270,13 @@ export default class ClientSocket {
 
         while (this._buffer && this._offset < this._buffer.length) {
             const buffer = this._buffer;
+
+            // Always start each message parse from the correct position.
+            // A previous payloadReader may have consumed only part of the prior
+            // message payload (e.g. a scan cursor only reads the cursor-ID), so
+            // buffer.position could be anywhere inside the previous message.
+            buffer.position = this._offset;
+
             // Response length
             const length = buffer.readInteger() + BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER);
 
@@ -288,23 +299,44 @@ export default class ClientSocket {
 
             this._logMessage(requestId, false, buffer.getSlice(this._offset - length, length));
 
+            // Record boundaries before the socket buffer is potentially cleared.
+            const msgEnd = this._offset;
+            const msgStart = msgEnd - length;
+
             if (this._offset === buffer.length) {
                 this._buffer = null;
                 this._offset = 0;
             }
 
+            // Carve a fresh, independent MessageBuffer from just this message's
+            // payload bytes (after length field + request-id).  Passing a copy
+            // rather than the shared socket buffer prevents two cursors created
+            // from the same TCP segment from aliasing the same position pointer
+            // and corrupting each other's reads under parallel scan workloads.
+            const headerConsumed = isHandshake
+                ? BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER)           // 4 B: length only
+                : BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER) +         // 4 B: length
+                  BinaryUtils.getSize(BinaryUtils.TYPE_CODE.LONG);             // 8 B: request-id
+            const freshBuffer = MessageBuffer.from(
+                buffer.buffer.slice(msgStart + headerConsumed, msgEnd),
+                0
+            );
+
             if (this._requests.has(requestId)) {
                 const request = this._requests.get(requestId);
                 this._requests.delete(requestId);
                 if (isHandshake) {
-                    await this._finalizeHandshake(buffer, request);
+                    await this._finalizeHandshake(freshBuffer, request);
                 }
                 else {
-                    await this._finalizeResponse(buffer, request);
+                    await this._finalizeResponse(freshBuffer, request);
                 }
             }
             else {
-                throw IgniteClientError.internalError('Invalid response id: ' + requestId);
+                // Ignite 2.14+ sends unsolicited server-side notification frames
+                // (topology changes, heartbeats) whose request IDs do not match any
+                // pending client request. Silently discard them and continue reading.
+                Logger.logDebug('Discarding server notification frame with id: ' + requestId);
             }
         }
     }
@@ -350,11 +382,11 @@ export default class ClientSocket {
     }
 
     async _finalizeResponse(buffer: MessageBuffer, request: Request) {
-        let statusCode, isSuccess;
+        let isSuccess;
 
         if (this._protocolVersion.compareTo(PROTOCOL_VERSION_1_4_0) < 0) {
             // Check status code
-            statusCode = buffer.readInteger();
+            const statusCode = buffer.readInteger();
             isSuccess = statusCode === REQUEST_SUCCESS_STATUS_CODE;
         }
         else {
@@ -368,7 +400,7 @@ export default class ClientSocket {
             }
 
             if (!isSuccess) {
-                statusCode = buffer.readInteger();
+                buffer.readInteger(); // advance past status code; error detail is in the message string
             }
         }
 

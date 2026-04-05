@@ -17,7 +17,6 @@
 
 'use strict';
 
-const Long = require('long');
 import BinaryUtils, { OPERATION } from './internal/BinaryUtils';
 import BinaryCommunicator from "./internal/BinaryCommunicator";
 import {PRIMITIVE_TYPE} from "./internal/Constants";
@@ -27,7 +26,7 @@ import {CacheEntry} from "./CacheClient";
 
 export abstract class BaseCursor<T> {
 
-    protected _id: Long;
+    protected _id: any;
 
     protected _hasNext: boolean;
 
@@ -74,8 +73,13 @@ export abstract class BaseCursor<T> {
      * @return {boolean} - true if more cache entries are available, false otherwise.
      */
     hasMore(): boolean {
+        // _buffer is set on a freshly-opened cursor and holds the first page of
+        // results before _getValues() has been called for the first time.
+        // Without this check, hasMore() incorrectly returns false on a new cursor
+        // because _hasNext starts as false and _values starts as null.
         return this._hasNext ||
-            this._values && this._valueIndex < this._values.length;
+            (this._values != null && this._valueIndex < this._values.length) ||
+            this._buffer != null;
     }
 
     /**
@@ -160,8 +164,15 @@ export abstract class BaseCursor<T> {
         if (!this._buffer && this._hasNext) {
             await this._getNext();
         }
-        await this._read(this._buffer)
-        this._buffer = null;
+        if (this._buffer) {
+            await this._read(this._buffer);
+            this._buffer = null;
+        } else {
+            // No buffer and no next page — cursor is exhausted.
+            // Set _values to null so getValue() returns null and
+            // hasMore() returns false rather than replaying old entries.
+            this._values = null;
+        }
         return this._values;
     }
 
