@@ -24,6 +24,8 @@ import BinaryCommunicator from "./internal/BinaryCommunicator";
 import {PRIMITIVE_TYPE} from "./internal/Constants";
 import { CompositeType } from "./ObjectType";
 import {CacheConfiguration} from "./CacheConfiguration";
+import { Transaction } from "./Transaction";
+import { ContinuousQuery, ContinuousQueryHandle } from "./ContinuousQuery";
 
 /**
  * Peek modes
@@ -64,6 +66,7 @@ export class CacheClient {
     private _valueType: PRIMITIVE_TYPE | CompositeType;
     private _name: string;
     private _config: CacheConfiguration;
+    private _transaction: Transaction | null;
 
     static get PEEK_MODE() {
         return PEEK_MODE;
@@ -556,6 +559,45 @@ export class CacheClient {
         return value;
     }
 
+    /**
+     * Returns a copy of this cache client bound to the provided transaction.
+     * All key-value operations performed on the returned instance will participate
+     * in the given transaction.
+     *
+     * The original cache client is not modified.
+     *
+     * @param {Transaction} transaction - the transaction to bind to.
+     *
+     * @return {CacheClient} - a new cache client instance bound to the transaction.
+     */
+    withTransaction(transaction: Transaction): CacheClient {
+        const copy = new CacheClient(this._name, this._config, this._communicator);
+        copy._keyType = this._keyType;
+        copy._valueType = this._valueType;
+        copy._transaction = transaction;
+        return copy;
+    }
+
+    /**
+     * Starts a continuous query on this cache.
+     *
+     * The provided listener will be called each time the server delivers a batch of
+     * cache-entry change events. The query remains active until {@link ContinuousQueryHandle#close}
+     * is called on the returned handle.
+     *
+     * @async
+     *
+     * @param {ContinuousQuery} query - continuous query configuration.
+     *
+     * @return {Promise<ContinuousQueryHandle>} - handle used to stop the continuous query.
+     *
+     * @throws {IgniteClientError} if error.
+     */
+    async queryContinuous(query: ContinuousQuery): Promise<ContinuousQueryHandle> {
+        ArgumentChecker.notNull(query, 'query');
+        return query._start(this._communicator, this._cacheId);
+    }
+
     /** Private methods */
 
     /**
@@ -568,6 +610,7 @@ export class CacheClient {
         this._keyType = null;
         this._valueType = null;
         this._communicator = communicator;
+        this._transaction = null;
     }
 
     /**
@@ -604,7 +647,12 @@ export class CacheClient {
      */
     _writeCacheInfo(payload) {
         payload.writeInteger(this._cacheId);
-        payload.writeByte(0);
+        if (this._transaction) {
+            payload.writeByte(0x02); // TRANSACTIONAL flag
+            payload.writeInteger(this._transaction.txId);
+        } else {
+            payload.writeByte(0);
+        }
     }
 
     /**

@@ -27,6 +27,7 @@ import {CacheConfiguration} from "./CacheConfiguration";
 import { CacheClient } from "./CacheClient";
 import BinaryUtils from "./internal/BinaryUtils";
 import MessageBuffer from "./internal/MessageBuffer";
+import { Transaction, TransactionConcurrency, TransactionIsolation } from "./Transaction";
 
 /**
  * State of Ignite client.
@@ -266,6 +267,43 @@ export class IgniteClient {
      */
     setDebug(value) {
         Logger.debug = value;
+    }
+
+    /**
+     * Starts a new thin-client transaction.
+     *
+     * @async
+     *
+     * @param {number} [concurrency=TransactionConcurrency.PESSIMISTIC] - transaction concurrency mode.
+     * @param {number} [isolation=TransactionIsolation.REPEATABLE_READ] - transaction isolation level.
+     * @param {number} [timeout=0] - transaction timeout in milliseconds (0 = no timeout).
+     * @param {string} [label] - optional human-readable transaction label.
+     *
+     * @return {Promise<Transaction>} - the started transaction.
+     *
+     * @throws {IllegalStateError} if the client is not in CONNECTED {@link IgniteClient.STATE}.
+     * @throws {IgniteClientError} if other error.
+     */
+    async beginTransaction(
+        concurrency: number = TransactionConcurrency.PESSIMISTIC,
+        isolation: number = TransactionIsolation.REPEATABLE_READ,
+        timeout: number = 0,
+        label: string = null
+    ): Promise<Transaction> {
+        let txId: number;
+        await this._communicator.send(
+            BinaryUtils.OPERATION.TRANSACTION_START,
+            (payload) => {
+                payload.writeByte(concurrency);
+                payload.writeByte(isolation);
+                payload.writeLong(timeout);
+                BinaryCommunicator.writeString(payload, label);
+            },
+            (payload) => {
+                txId = payload.readInteger();
+            }
+        );
+        return new Transaction(txId, this._communicator);
     }
 
     /** Private methods */

@@ -118,6 +118,8 @@ export default class ClientSocket {
 
     private _requests: Map<string, Request>;
 
+    private _continuousQueryListeners: Map<string, Function>;
+
     private _nodeUuid: string;
 
     private _error: string | Error;
@@ -148,6 +150,7 @@ export default class ClientSocket {
 
         this._state = STATE.INITIAL;
         this._requests = new Map<string, Request>();
+        this._continuousQueryListeners = new Map<string, Function>();
         this._requestId = Long.ZERO;
         this._handshakeRequestId = null;
         this._protocolVersion = null;
@@ -197,6 +200,14 @@ export default class ClientSocket {
         else {
             throw new IllegalStateError(this._state);
         }
+    }
+
+    registerContinuousQueryListener(handleId: string, listener: Function): void {
+        this._continuousQueryListeners.set(handleId, listener);
+    }
+
+    unregisterContinuousQueryListener(handleId: string): void {
+        this._continuousQueryListeners.delete(handleId);
     }
 
     _connectSocket(handshakeRequest) {
@@ -331,6 +342,19 @@ export default class ClientSocket {
                 else {
                     await this._finalizeResponse(freshBuffer, request);
                 }
+            }
+            else if (this._continuousQueryListeners.has(requestId)) {
+                // Server-push CQ event notification frame (protocol 1.4.0):
+                //   [2B flags] [2B op-code = 2006] [4B event_count] [events...]
+                // Strip the flags and op-code before handing the buffer to the listener.
+                const flags = freshBuffer.readShort();   // e.g. 0x0004 = NOTIFICATION flag
+                if (flags & FLAG_TOPOLOGY_CHANGED) {
+                    const newVersion = new AffinityTopologyVersion(freshBuffer);
+                    await this._onAffinityTopologyChange(newVersion);
+                }
+                freshBuffer.readShort();   // consume op-code (QUERY_CONTINUOUS_EVENT_NOTIFICATION)
+                const listener = this._continuousQueryListeners.get(requestId);
+                await listener(freshBuffer);
             }
             else {
                 // Ignite 2.14+ sends unsolicited server-side notification frames

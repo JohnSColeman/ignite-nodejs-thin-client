@@ -45,6 +45,7 @@ export default class Router {
     private _backgroundConnectTask: Promise<void>;
     private _legacyConnection: ClientSocket;
     private _affinityTopologyVer: AffinityTopologyVersion;
+    private _continuousQueryListeners: Map<string, Function>;
 
     constructor(onStateChanged: IgniteClientOnStateChanged) {
         this._state = IgniteClient.STATE.DISCONNECTED;
@@ -66,6 +67,8 @@ export default class Router {
         // {cacheId -> CacheAffinityMap}
         this._distributionMap = new Map<number, CacheAffinityMap>();
         this._affinityTopologyVer = null;
+        // {handleId -> listener} for continuous query push notifications
+        this._continuousQueryListeners = new Map<string, Function>();
     }
 
     async connect(communicator: BinaryCommunicator, config: IgniteClientConfiguration) {
@@ -93,6 +96,20 @@ export default class Router {
             }
 
             this._cleanUp();
+        }
+    }
+
+    registerContinuousQueryListener(handleId: string, listener: Function): void {
+        this._continuousQueryListeners.set(handleId, listener);
+        for (const socket of this._getAllConnections()) {
+            socket.registerContinuousQueryListener(handleId, listener);
+        }
+    }
+
+    unregisterContinuousQueryListener(handleId: string): void {
+        this._continuousQueryListeners.delete(handleId);
+        for (const socket of this._getAllConnections()) {
+            socket.unregisterContinuousQueryListener(handleId);
         }
     }
 
@@ -258,6 +275,11 @@ export default class Router {
         const index = this._inactiveEndpoints.indexOf(socket.endpoint);
         if (index > -1) {
             this._inactiveEndpoints.splice(index, 1);
+        }
+
+        // Propagate any active continuous query listeners to the new connection
+        for (const [handleId, listener] of this._continuousQueryListeners) {
+            socket.registerContinuousQueryListener(handleId, listener);
         }
 
         if (!this._partitionAwarenessActive &&

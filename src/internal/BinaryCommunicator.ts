@@ -64,6 +64,14 @@ export default class BinaryCommunicator {
         await this._router.send(opCode, payloadWriter, payloadReader, affinityHint);
     }
 
+    registerContinuousQueryListener(handleId: string, listener: Function): void {
+        this._router.registerContinuousQueryListener(handleId, listener);
+    }
+
+    unregisterContinuousQueryListener(handleId: string): void {
+        this._router.unregisterContinuousQueryListener(handleId);
+    }
+
     get typeStorage() {
         return this._typeStorage;
     }
