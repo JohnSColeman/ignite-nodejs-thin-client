@@ -1,7 +1,7 @@
 {
-  "name": "apache-ignite-client",
+  "name": "@qbyteconsulting/apache-ignite-client",
   "version": "1.2.0",
-  "description": "NodeJS Client for Apache Ignite",
+  "description": "NodeJS Thin Client for Apache Ignite — Maintained fork with fixes by Qbyte Consulting. Original repository: https://github.com/apache/ignite-nodejs-thin-client",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
@@ -10,15 +10,16 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/apache/ignite/tree/master/modules/platforms/nodejs"
+    "url": "https://github.com/JohnSColeman/ignite-nodejs-thin-client.git"
   },
   "keywords": [
     "apache",
     "ignite",
     "client"
   ],
-  "author": "",
+  "author": "Qbyte Consulting (fork of Apache Ignite)",
   "license": "Apache-2.0",
+  "private": false,
   "engines": {
     "node": ">=8.0.0"
   },
@@ -31,7 +32,8 @@
     "test:examples": "node ./spec/ExamplesExecutor.js Examples",
     "test:auth_example": "node ./spec/ExamplesExecutor.js AuthExample",
     "test:partition_awareness": "APACHE_IGNITE_CLIENT_PARTITION_AWARENESS=true node ./spec/PartitionAwarenessExecutor.js",
-    "build": "tsc"
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "jasmine": "3.6.2",

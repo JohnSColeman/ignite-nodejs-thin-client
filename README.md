@@ -1,3 +1,19 @@
+# @qbyteconsulting/apache-ignite-client
+
+**Maintained fork** of the Apache Ignite Node.js Thin Client with bug fixes and updates.
+
+This is an actively maintained version of the original `apache-ignite-client` package (last official release was over 7 years ago).
+
+- **Original Apache repository**: https://github.com/apache/ignite-nodejs-thin-client
+- **Your fork with fixes**: https://github.com/JohnSColeman/ignite-nodejs-thin-client
+
+---
+
+## Installation
+
+```bash
+npm install @qbyteconsulting/apache-ignite-client
+
 # Node.js Client for Apache Ignite #
 
 ## Installation ##
