@@ -75,10 +75,15 @@ export enum OPERATION {
     QUERY_SQL_CURSOR_GET_PAGE = 2003,
     QUERY_SQL_FIELDS = 2004,
     QUERY_SQL_FIELDS_CURSOR_GET_PAGE = 2005,
+    // Continuous Queries
+    QUERY_CONTINUOUS = 2006,
     RESOURCE_CLOSE = 0,
     // Binary Types
     GET_BINARY_TYPE = 3002,
-    PUT_BINARY_TYPE = 3003
+    PUT_BINARY_TYPE = 3003,
+    // Transactions
+    TRANSACTION_START = 4000,
+    TRANSACTION_END = 4001
 }
 
 export const TYPE_CODE = {

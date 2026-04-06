@@ -35,3 +35,5 @@ export * from './Cursor';
 export * as Errors from  "./Errors";
 
 export {IgniteClient} from './IgniteClient';
+export { Transaction, TransactionConcurrency, TransactionIsolation } from './Transaction';
+export { ContinuousQuery, ContinuousQueryHandle, CacheEntryEvent, CacheEntryEventType } from './ContinuousQuery';

@@ -118,6 +118,8 @@ export default class ClientSocket {
 
     private _requests: Map<string, Request>;
 
+    private _continuousQueryListeners: Map<string, Function>;
+
     private _nodeUuid: string;
 
     private _error: string | Error;
@@ -148,6 +150,7 @@ export default class ClientSocket {
 
         this._state = STATE.INITIAL;
         this._requests = new Map<string, Request>();
+        this._continuousQueryListeners = new Map<string, Function>();
         this._requestId = Long.ZERO;
         this._handshakeRequestId = null;
         this._protocolVersion = null;
@@ -197,6 +200,14 @@ export default class ClientSocket {
         else {
             throw new IllegalStateError(this._state);
         }
+    }
+
+    registerContinuousQueryListener(handleId: string, listener: Function): void {
+        this._continuousQueryListeners.set(handleId, listener);
+    }
+
+    unregisterContinuousQueryListener(handleId: string): void {
+        this._continuousQueryListeners.delete(handleId);
     }
 
     _connectSocket(handshakeRequest) {
@@ -313,27 +324,32 @@ export default class ClientSocket {
                 this._offset = 0;
             }
 
-            if (this._requests.has(requestId)) {
-                const request = this._requests.get(requestId);
-                this._requests.delete(requestId);
-
-                // Carve a fresh, independent MessageBuffer from just this message's
-                // payload bytes (after length field + request-id). getSlice() returns
-                // a view over the shared socket buffer, but MessageBuffer.from() copies
-                // those bytes (via Buffer.from), so freshBuffer owns an independent
-                // buffer with its own position pointer. That independence prevents two
-                // cursors created from the same TCP segment from aliasing the same
-                // position and corrupting each other's reads under parallel scan
-                // workloads. Built only on the matched-request path so unmatched frames
-                // cost no copy.
+            // Carve a fresh, independent MessageBuffer from just this message's
+            // payload bytes (after length field + request-id). getSlice() returns
+            // a view over the shared socket buffer, but MessageBuffer.from() copies
+            // those bytes (via Buffer.from), so the result owns an independent
+            // buffer with its own position pointer. That independence prevents two
+            // cursors created from the same TCP segment from aliasing the same
+            // position and corrupting each other's reads under parallel scan
+            // workloads. Invoked only on the paths that actually consume the payload
+            // (matched request, or a registered continuous-query listener) so frames
+            // that match neither cost no copy.
+            const carvePayload = () => {
                 const headerConsumed = isHandshake
                     ? BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER)           // 4 B: length only
                     : BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER) +         // 4 B: length
                       BinaryUtils.getSize(BinaryUtils.TYPE_CODE.LONG);             // 8 B: request-id
-                const freshBuffer = MessageBuffer.from(
+                return MessageBuffer.from(
                     buffer.getSlice(msgStart + headerConsumed, msgEnd),
                     0
                 );
+            };
+
+            if (this._requests.has(requestId)) {
+                const request = this._requests.get(requestId);
+                this._requests.delete(requestId);
+
+                const freshBuffer = carvePayload();
 
                 if (isHandshake) {
                     // Handshake is single-in-flight, transitions _state and issues no
@@ -368,12 +384,28 @@ export default class ClientSocket {
                     });
                 }
             }
+            else if (this._continuousQueryListeners.has(requestId)) {
+                // Server-push CQ event notification frame (protocol 1.4.0):
+                //   [2B flags] [2B op-code = 2006] [4B event_count] [events...]
+                // Strip the flags and op-code before handing the buffer to the listener.
+                const freshBuffer = carvePayload();
+                const flags = freshBuffer.readShort();   // e.g. 0x0004 = NOTIFICATION flag
+                if (flags & FLAG_TOPOLOGY_CHANGED) {
+                    const newVersion = new AffinityTopologyVersion(freshBuffer);
+                    await this._onAffinityTopologyChange(newVersion);
+                }
+                freshBuffer.readShort();   // consume op-code (QUERY_CONTINUOUS_EVENT_NOTIFICATION)
+                const listener = this._continuousQueryListeners.get(requestId);
+                await listener(freshBuffer);
+            }
             else {
-                // No pending request matches this response id. At the protocol version
-                // this client negotiates (<= 1.4.0) the server never sends unsolicited
-                // frames: affinity-topology updates ride on response flags (handled in
-                // _finalizeResponse), and notification / heartbeat frames only exist in
-                // later protocol versions this client does not speak. Requests are also
+                // No pending request matches this response id, and no continuous-query
+                // listener is registered under it. Continuous-query notifications are
+                // the only unsolicited frames the server sends at the protocol version
+                // this client negotiates (<= 1.4.0), and the branch above already
+                // claimed those: affinity-topology updates otherwise ride on response
+                // flags (handled in _finalizeResponse), and heartbeat frames only exist
+                // in later protocol versions this client does not speak. Requests are also
                 // never removed while still awaiting a response (there is no client-side
                 // timeout), so an unmatched id cannot be a late or duplicate reply.
                 // It therefore means the response byte stream has desynced, after which
