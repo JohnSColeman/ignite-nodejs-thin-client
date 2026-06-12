@@ -338,16 +338,21 @@ export default class ClientSocket {
                 }
             }
             else {
-                // No pending request matches this response id. At the protocol
-                // version this client negotiates (<= 1.4.0) the server has no reason
-                // to send an unsolicited frame: affinity-topology updates ride on
-                // response flags (handled in _finalizeResponse), and notification /
-                // heartbeat frames only exist in later protocol versions this client
-                // does not speak. An unmatched id therefore most likely indicates a
-                // parsing desync. Discard it so the connection survives instead of
-                // crashing, but warn (when debug is enabled) so the anomaly is
-                // diagnosable rather than silently masked.
-                Logger.logWarning('Discarding response frame with unmatched request id: ' + requestId);
+                // No pending request matches this response id. At the protocol version
+                // this client negotiates (<= 1.4.0) the server never sends unsolicited
+                // frames: affinity-topology updates ride on response flags (handled in
+                // _finalizeResponse), and notification / heartbeat frames only exist in
+                // later protocol versions this client does not speak. Requests are also
+                // never removed while still awaiting a response (there is no client-side
+                // timeout), so an unmatched id cannot be a late or duplicate reply.
+                // It therefore means the response byte stream has desynced, after which
+                // every subsequent frame is garbage and the originating request would
+                // otherwise hang forever. Fail fast: throwing propagates to the socket
+                // 'data' handler's catch, which disconnects and rejects all pending
+                // requests with LostConnectionError so callers can recover instead of
+                // hanging.
+                throw IgniteClientError.internalError(
+                    'Response stream desync: received a frame with unmatched request id ' + requestId);
             }
         }
     }

@@ -41,10 +41,4 @@ export default class Logger {
             console.log('ERROR: ' + data, ...args);
         }
     }
-
-    static logWarning(data: string, ...args: any[]) {
-        if (Logger._debug) {
-            console.log('WARNING: ' + data, ...args);
-        }
-    }
 }
