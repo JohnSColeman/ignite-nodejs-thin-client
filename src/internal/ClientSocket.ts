@@ -333,10 +333,16 @@ export default class ClientSocket {
                 }
             }
             else {
-                // Ignite 2.14+ sends unsolicited server-side notification frames
-                // (topology changes, heartbeats) whose request IDs do not match any
-                // pending client request. Silently discard them and continue reading.
-                Logger.logDebug('Discarding server notification frame with id: ' + requestId);
+                // No pending request matches this response id. At the protocol
+                // version this client negotiates (<= 1.4.0) the server has no reason
+                // to send an unsolicited frame: affinity-topology updates ride on
+                // response flags (handled in _finalizeResponse), and notification /
+                // heartbeat frames only exist in later protocol versions this client
+                // does not speak. An unmatched id therefore most likely indicates a
+                // parsing desync. Discard it so the connection survives instead of
+                // crashing, but warn (when debug is enabled) so the anomaly is
+                // diagnosable rather than silently masked.
+                Logger.logWarning('Discarding response frame with unmatched request id: ' + requestId);
             }
         }
     }
