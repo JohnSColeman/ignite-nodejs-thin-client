@@ -313,11 +313,14 @@ export default class ClientSocket {
                 this._requests.delete(requestId);
 
                 // Carve a fresh, independent MessageBuffer from just this message's
-                // payload bytes (after length field + request-id).  Passing a copy
-                // rather than the shared socket buffer prevents two cursors created
-                // from the same TCP segment from aliasing the same position pointer
-                // and corrupting each other's reads under parallel scan workloads.
-                // Built only on the matched-request path so unmatched frames cost no copy.
+                // payload bytes (after length field + request-id). getSlice() returns
+                // a view over the shared socket buffer, but MessageBuffer.from() copies
+                // those bytes (via Buffer.from), so freshBuffer owns an independent
+                // buffer with its own position pointer. That independence prevents two
+                // cursors created from the same TCP segment from aliasing the same
+                // position and corrupting each other's reads under parallel scan
+                // workloads. Built only on the matched-request path so unmatched frames
+                // cost no copy.
                 const headerConsumed = isHandshake
                     ? BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER)           // 4 B: length only
                     : BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER) +         // 4 B: length
