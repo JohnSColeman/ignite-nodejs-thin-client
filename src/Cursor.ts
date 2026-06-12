@@ -17,6 +17,7 @@
 
 'use strict';
 
+import Long = require('long');
 import BinaryUtils, { OPERATION } from './internal/BinaryUtils';
 import BinaryCommunicator from "./internal/BinaryCommunicator";
 import {PRIMITIVE_TYPE} from "./internal/Constants";
@@ -26,7 +27,7 @@ import {CacheEntry} from "./CacheClient";
 
 export abstract class BaseCursor<T> {
 
-    protected _id: any;
+    protected _id: Long;
 
     protected _hasNext: boolean;
 
@@ -73,13 +74,23 @@ export abstract class BaseCursor<T> {
      * @return {boolean} - true if more cache entries are available, false otherwise.
      */
     hasMore(): boolean {
-        // _buffer is set on a freshly-opened cursor and holds the first page of
-        // results before _getValues() has been called for the first time.
-        // Without this check, hasMore() incorrectly returns false on a new cursor
-        // because _hasNext starts as false and _values starts as null.
-        return this._hasNext ||
-            (this._values != null && this._valueIndex < this._values.length) ||
-            this._buffer != null;
+        if (this._hasNext) {
+            return true;
+        }
+        if (this._values != null && this._valueIndex < this._values.length) {
+            return true;
+        }
+        if (this._buffer != null) {
+            // Peek the buffered first page without consuming it. A page is laid out as
+            // [rowCount:int][rows...][hasNext:bool]; rowCount === 0 with a trailing
+            // hasNext === false is an empty result, so hasMore() must be false here.
+            const savedPosition = this._buffer.position;
+            const rowCount = this._buffer.readInteger();
+            const more = rowCount > 0 || this._buffer.readBoolean();
+            this._buffer.position = savedPosition;
+            return more;
+        }
+        return false;
     }
 
     /**
