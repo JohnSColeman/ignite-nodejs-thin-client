@@ -308,23 +308,25 @@ export default class ClientSocket {
                 this._offset = 0;
             }
 
-            // Carve a fresh, independent MessageBuffer from just this message's
-            // payload bytes (after length field + request-id).  Passing a copy
-            // rather than the shared socket buffer prevents two cursors created
-            // from the same TCP segment from aliasing the same position pointer
-            // and corrupting each other's reads under parallel scan workloads.
-            const headerConsumed = isHandshake
-                ? BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER)           // 4 B: length only
-                : BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER) +         // 4 B: length
-                  BinaryUtils.getSize(BinaryUtils.TYPE_CODE.LONG);             // 8 B: request-id
-            const freshBuffer = MessageBuffer.from(
-                buffer.getSlice(msgStart + headerConsumed, msgEnd),
-                0
-            );
-
             if (this._requests.has(requestId)) {
                 const request = this._requests.get(requestId);
                 this._requests.delete(requestId);
+
+                // Carve a fresh, independent MessageBuffer from just this message's
+                // payload bytes (after length field + request-id).  Passing a copy
+                // rather than the shared socket buffer prevents two cursors created
+                // from the same TCP segment from aliasing the same position pointer
+                // and corrupting each other's reads under parallel scan workloads.
+                // Built only on the matched-request path so unmatched frames cost no copy.
+                const headerConsumed = isHandshake
+                    ? BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER)           // 4 B: length only
+                    : BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER) +         // 4 B: length
+                      BinaryUtils.getSize(BinaryUtils.TYPE_CODE.LONG);             // 8 B: request-id
+                const freshBuffer = MessageBuffer.from(
+                    buffer.getSlice(msgStart + headerConsumed, msgEnd),
+                    0
+                );
+
                 if (isHandshake) {
                     await this._finalizeHandshake(freshBuffer, request);
                 }
