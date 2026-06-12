@@ -318,7 +318,7 @@ export default class ClientSocket {
                 : BinaryUtils.getSize(BinaryUtils.TYPE_CODE.INTEGER) +         // 4 B: length
                   BinaryUtils.getSize(BinaryUtils.TYPE_CODE.LONG);             // 8 B: request-id
             const freshBuffer = MessageBuffer.from(
-                buffer.buffer.slice(msgStart + headerConsumed, msgEnd),
+                buffer.getSlice(msgStart + headerConsumed, msgEnd),
                 0
             );
 
