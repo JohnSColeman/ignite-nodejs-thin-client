@@ -218,9 +218,11 @@ export default class ClientSocket {
         }
 
         // Serialize response processing — each 'data' event is chained onto the
-        // previous one so that _processResponse never runs concurrently.
-        // Without this, a second TCP frame arriving while _finalizeResponse is
-        // awaited would corrupt the shared _buffer/_offset state.
+        // previous one so that _processResponse never runs concurrently. This
+        // protects the synchronous frame-splitting that mutates the shared
+        // _buffer/_offset state, and the awaited handshake finalize. Matched
+        // responses are finalized off this chain (see _processResponse) so that a
+        // payloadReader's nested same-socket request cannot deadlock the queue.
         this._socket.on('data', (data: Buffer) => {
             this._processingQueue = this._processingQueue
                 .then(() => this._processResponse(data))
@@ -297,11 +299,14 @@ export default class ClientSocket {
                 requestId = buffer.readLong().toString();
             }
 
-            this._logMessage(requestId, false, buffer.getSlice(this._offset - length, length));
-
             // Record boundaries before the socket buffer is potentially cleared.
+            // getSlice(start, end) takes an end offset, not a length, so the message
+            // bytes are [msgStart, msgEnd); passing `length` as the end logs empty
+            // bytes for any 2nd+ frame in a segment (where msgStart > 0).
             const msgEnd = this._offset;
             const msgStart = msgEnd - length;
+
+            this._logMessage(requestId, false, buffer.getSlice(msgStart, msgEnd));
 
             if (this._offset === buffer.length) {
                 this._buffer = null;
@@ -331,10 +336,28 @@ export default class ClientSocket {
                 );
 
                 if (isHandshake) {
+                    // Handshake is single-in-flight, transitions _state and issues no
+                    // nested request, so it is safe to await inline on the queue.
                     await this._finalizeHandshake(freshBuffer, request);
                 }
                 else {
-                    await this._finalizeResponse(freshBuffer, request);
+                    // Do NOT await on the processing queue: a payloadReader may issue a
+                    // nested request on this same socket and await its reply (e.g.
+                    // GET_BINARY_TYPE when reading a COMPLEX_OBJECT whose type is not yet
+                    // cached in this client's BinaryTypeStorage). That reply arrives as a
+                    // later 'data' event chained behind this very queue entry, so awaiting
+                    // here would deadlock — the entry can only complete once the reply is
+                    // processed, but the reply can only be processed by a later entry.
+                    // freshBuffer is an independent copy of this message's payload, so
+                    // finalizing it off the parse chain cannot corrupt _buffer/_offset.
+                    // With finalize detached the CONNECTED path of _processResponse has no
+                    // remaining await and runs to completion synchronously, so two
+                    // invocations still cannot interleave on _buffer/_offset and the parse
+                    // race stays closed.
+                    this._finalizeResponse(freshBuffer, request).catch(err => {
+                        this._error = err.message;
+                        this._disconnect();
+                    });
                 }
             }
             else {

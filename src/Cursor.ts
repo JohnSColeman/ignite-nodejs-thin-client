@@ -85,10 +85,15 @@ export abstract class BaseCursor<T> {
             // [rowCount:int][rows...][hasNext:bool]; rowCount === 0 with a trailing
             // hasNext === false is an empty result, so hasMore() must be false here.
             const savedPosition = this._buffer.position;
-            const rowCount = this._buffer.readInteger();
-            const more = rowCount > 0 || this._buffer.readBoolean();
-            this._buffer.position = savedPosition;
-            return more;
+            try {
+                const rowCount = this._buffer.readInteger();
+                return rowCount > 0 || this._buffer.readBoolean();
+            }
+            finally {
+                // Restore even if a read throws on a short/truncated page, so the
+                // peek never advances the buffer position (keeps hasMore() total).
+                this._buffer.position = savedPosition;
+            }
         }
         return false;
     }
