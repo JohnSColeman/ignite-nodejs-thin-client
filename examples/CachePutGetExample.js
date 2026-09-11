@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-const {IgniteClient, ObjectType, ComplexObjectType, BinaryObject, CacheEntry, ScanQuery, IgniteClientConfiguration} = require('apache-ignite-client');
+const {IgniteClient, ObjectType, ComplexObjectType, BinaryObject, CacheEntry, ScanQuery, IgniteClientConfiguration} = require('@qbyteconsulting/apache-ignite-client');
 
 const ENDPOINT = '127.0.0.1:10800';
 

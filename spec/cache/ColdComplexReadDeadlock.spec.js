@@ -31,8 +31,8 @@ const Long = require('long');
 // on the socket's serialized processing queue, the nested reply is chained behind
 // the still-pending outer entry and can never be processed -> the outer request
 // hangs forever. With finalization dispatched off the queue, it resolves.
-const ClientSocket = require('apache-ignite-client/dist/internal/ClientSocket').default;
-const MessageBuffer = require('apache-ignite-client/dist/internal/MessageBuffer').default;
+const ClientSocket = require('@qbyteconsulting/apache-ignite-client/dist/internal/ClientSocket').default;
+const MessageBuffer = require('@qbyteconsulting/apache-ignite-client/dist/internal/MessageBuffer').default;
 
 const HANDSHAKE_SUCCESS_STATUS_CODE = 1;
 const OP_OUTER = 2001;

@@ -16,7 +16,7 @@
  */
 
 const Util = require('util');
-const {IgniteClient, ObjectType, CacheConfiguration, SqlFieldsQuery, SqlQuery, IgniteClientConfiguration,ComplexObjectType,QueryEntity,QueryField} = require('apache-ignite-client');
+const {IgniteClient, ObjectType, CacheConfiguration, SqlFieldsQuery, SqlQuery, IgniteClientConfiguration,ComplexObjectType,QueryEntity,QueryField} = require('@qbyteconsulting/apache-ignite-client');
 
 const ENDPOINT = '127.0.0.1:10800';
 

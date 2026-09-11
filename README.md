@@ -11,7 +11,7 @@ Once `node` and `npm` are installed, you can use one of the following installati
 This is a recommended way for users. Execute the following command to install the Node.js Thin Client package:
 
 ```
-npm install -g apache-ignite-client
+npm install -g @qbyteconsulting/apache-ignite-client
 ```
 
 ### Installation from Sources ###
@@ -21,14 +21,14 @@ This way is more suitable for developers or if you install client from zip archi
 1. Download and/or unzip Node.js Ignite sources to `nodejs-thin-client`
 2. Go to `nodejs-thin-client` folder
 3. Execute `npm link` command
-4. Execute `npm link apache-ignite-client` command
+4. Execute `npm link @qbyteconsulting/apache-ignite-client` command
 
 ```bash
 cd nodejs-thin-client
 npm install
 npm run build
 npm link
-npm link apache-ignite-client #linking examples (optional)
+npm link @qbyteconsulting/apache-ignite-client #linking examples (optional)
 ```
 
 ### Updating from older version

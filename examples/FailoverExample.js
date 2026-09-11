@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-const {IgniteClient, IgniteClientConfiguration} = require('apache-ignite-client');
+const {IgniteClient, IgniteClientConfiguration} = require('@qbyteconsulting/apache-ignite-client');
 
 const ENDPOINT1 = 'localhost:10800';
 const ENDPOINT2 = 'localhost:10801';

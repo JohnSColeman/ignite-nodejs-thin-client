@@ -20,7 +20,7 @@
 require('jasmine-expect');
 
 const TestingHelper = require('../TestingHelper');
-const {IgniteClient, ObjectType, MapObjectType, ComplexObjectType, CollectionObjectType, BinaryObject, ObjectArrayType, EnumItem, Timestamp, Decimal} = require('apache-ignite-client');
+const {IgniteClient, ObjectType, MapObjectType, ComplexObjectType, CollectionObjectType, BinaryObject, ObjectArrayType, EnumItem, Timestamp, Decimal} = require('@qbyteconsulting/apache-ignite-client');
 
 const CACHE_NAME = '__test_cache';
 

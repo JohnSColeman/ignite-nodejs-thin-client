@@ -21,7 +21,7 @@ require('jasmine-expect');
 
 const Util = require('util');
 const TestingHelper = require('../TestingHelper');
-const { IgniteClient, ObjectType, MapObjectType, ComplexObjectType, BinaryObject } = require('apache-ignite-client');
+const { IgniteClient, ObjectType, MapObjectType, ComplexObjectType, BinaryObject } = require('@qbyteconsulting/apache-ignite-client');
 
 const CACHE_NAME = '__test_cache';
 const ONE_BYTE_MAX_OFFSET = 0x100 - 1;

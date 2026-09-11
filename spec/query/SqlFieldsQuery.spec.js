@@ -21,7 +21,7 @@ require('jasmine-expect');
 
 const config = require('../config');
 const TestingHelper = require('../TestingHelper');
-const {IgniteClient, Errors, SqlFieldsQuery, ObjectType, CacheConfiguration} = require('apache-ignite-client');
+const {IgniteClient, Errors, SqlFieldsQuery, ObjectType, CacheConfiguration} = require('@qbyteconsulting/apache-ignite-client');
 
 const CACHE_NAME = '__test_cache';
 const TABLE_NAME = '__test_SqlFieldsQuery_table';

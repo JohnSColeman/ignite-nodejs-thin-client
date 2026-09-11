@@ -27,7 +27,7 @@ const fs = require('fs');
 const child_process = require('child_process');
 const config = require('./config');
 const LogReader = require('./LogReader');
-const {IgniteClient, IgniteClientConfiguration, Errors, EnumItem, Timestamp, Decimal, BinaryObject, ObjectType} = require('apache-ignite-client');
+const {IgniteClient, IgniteClientConfiguration, Errors, EnumItem, Timestamp, Decimal, BinaryObject, ObjectType} = require('@qbyteconsulting/apache-ignite-client');
 
 const TIMEOUT_MS = 60000;
 
@@ -164,7 +164,7 @@ const arrayValues = {
     [ObjectType.PRIMITIVE_TYPE.TIME_ARRAY] : { elemType : ObjectType.PRIMITIVE_TYPE.TIME }
 };
 
-// Helper class for testing apache-ignite-client library.
+// Helper class for testing @qbyteconsulting/apache-ignite-client library.
 // Contains common methods for testing environment initialization and cleanup.
 class TestingHelper {
     static get TIMEOUT() {

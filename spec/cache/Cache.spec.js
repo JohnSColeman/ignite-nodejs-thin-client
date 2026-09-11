@@ -21,7 +21,7 @@ require('jasmine-expect');
 
 const config = require('../config');
 const TestingHelper = require('../TestingHelper');
-const {IgniteClient, Errors, CacheConfiguration, QueryEntity, QueryField, QueryIndex} = require('apache-ignite-client');
+const {IgniteClient, Errors, CacheConfiguration, QueryEntity, QueryField, QueryIndex} = require('@qbyteconsulting/apache-ignite-client');
 
 const CACHE_NAME = '__test_cache';
 const CACHE_NAME2 = '__test_cache2';
